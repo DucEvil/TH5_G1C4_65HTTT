@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 import '../models/transaction.dart';
 import 'add_transaction_screen.dart';
 import 'package:intl/intl.dart';
@@ -32,9 +33,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Trang chính')),
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: () async {
+              await AuthService.instance.signOut();
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('TH5 - Nhóm G1C4'),
+            SizedBox(height: 2),
+            Text('Trang chính', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        surfaceTintColor: cs.primary,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -61,17 +82,12 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
               child: TextField(
                 controller: searchCtrl,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Tìm kiếm...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
+                  prefixIcon: Icon(Icons.search),
                 ),
-                onChanged: (v) => setState(() => searchQuery = v.trim().toLowerCase()),
+                onChanged: (v) =>
+                    setState(() => searchQuery = v.trim().toLowerCase()),
               ),
             ),
             const SizedBox(height: 8),
@@ -81,33 +97,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, txs, _) {
                   var recent = List.of(txs.reversed).take(6).toList();
                   if (searchQuery.isNotEmpty) {
-                    recent = recent.where((t) => t.title.toLowerCase().contains(searchQuery)).toList();
+                    recent = recent
+                        .where(
+                          (t) => t.title.toLowerCase().contains(searchQuery),
+                        )
+                        .toList();
                   }
                   if (recent.isEmpty) {
                     return const Center(child: Text('Không có giao dịch'));
                   }
                   return ListView.separated(
                     itemCount: recent.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final t = recent[index];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: t.type == TransactionType.income ? Colors.green : Colors.red,
+                          backgroundColor: t.type == TransactionType.income
+                              ? cs.secondary
+                              : cs.error,
                           child: Icon(
-                            t.type == TransactionType.income ? Icons.arrow_downward : Icons.arrow_upward,
+                            t.type == TransactionType.income
+                                ? Icons.arrow_downward
+                                : Icons.arrow_upward,
                             color: Colors.white,
                           ),
                         ),
-                        title: Text(t.category + ' • ' + (t.note ?? '')),
-                        subtitle: Text(_subtitleDate(t)),
+                        title: Text(
+                          t.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (t.note != null && t.note!.isNotEmpty)
+                              Text(
+                                t.note!,
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            Text(
+                              '${t.category} • ${_subtitleDate(t)}',
+                              style: TextStyle(
+                                color: cs.onSurface.withAlpha(
+                                  (0.7 * 255).round(),
+                                ),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                         trailing: Text(
-                          (t.type == TransactionType.income ? '+ ' : '- ') + currency.format(t.amount),
+                          (t.type == TransactionType.income ? '+ ' : '- ') +
+                              currency.format(t.amount),
                         ),
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => AddTransactionScreen(editing: t)),
+                            MaterialPageRoute(
+                              builder: (_) => AddTransactionScreen(editing: t),
+                            ),
                           );
                         },
                       );
@@ -134,11 +188,12 @@ class _BalanceCard extends StatelessWidget {
     required this.income,
     required this.expense,
     required this.currency,
-    super.key,
+    // key intentionally omitted to silence unused-key analyzer warning
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -158,14 +213,14 @@ class _BalanceCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tổng thu', style: TextStyle(color: Colors.green)),
+                    Text('Tổng thu', style: TextStyle(color: cs.secondary)),
                     Text(currency.format(income)),
                   ],
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tổng chi', style: TextStyle(color: Colors.red)),
+                    Text('Tổng chi', style: TextStyle(color: cs.error)),
                     Text(currency.format(expense)),
                   ],
                 ),

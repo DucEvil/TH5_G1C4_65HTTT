@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../widgets/expense_chart.dart';
 
 import '../models/transaction.dart';
 import '../services/database_service.dart';
@@ -34,219 +35,35 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
-
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Thống kê')),
-      body: ValueListenableBuilder<List<TransactionModel>>(
-        valueListenable: db.transactions,
-        builder: (context, transactions, _) {
-          final expenses = transactions
-              .where((t) => t.type == TransactionType.expense)
-              .toList()
-            ..sort((a, b) => b.date.compareTo(a.date));
-
-          if (expenses.isEmpty) {
-            return const _EmptyStatisticsState();
-          }
-
-          final categoryTotals = _aggregateByCategory(expenses);
-          final periodTotals = _selectedRange == StatisticsRange.weekly
-              ? _aggregateByWeek(expenses)
-              : _aggregateByMonth(expenses);
-          final totalExpense = expenses.fold<double>(
-            0,
-            (sum, item) => sum + item.amount,
-          );
-          final topCategory = categoryTotals.entries.reduce(
-            (current, next) => current.value >= next.value ? current : next,
-          );
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            children: [
-              _OverviewCard(
-                totalExpense: totalExpense,
-                totalTransactions: expenses.length,
-                topCategory: topCategory.key,
-                topCategoryAmount: topCategory.value,
-                currency: currency,
-              ),
-              const SizedBox(height: 20),
-              _SectionCard(
-                title: 'Chi tiêu theo danh mục',
-                subtitle: 'Tỷ trọng từng nhóm chi trong toàn bộ giao dịch.',
-                child: _CategoryChart(
-                  totals: categoryTotals,
-                  currency: currency,
-                  colors: _chartColors,
-                ),
-              ),
-              const SizedBox(height: 20),
-              _SectionCard(
-                title: 'Chi tiêu theo thời gian',
-                subtitle: 'So sánh xu hướng chi tiêu theo tuần hoặc theo tháng.',
-                action: SegmentedButton<StatisticsRange>(
-                  segments: const [
-                    ButtonSegment<StatisticsRange>(
-                      value: StatisticsRange.weekly,
-                      label: Text('Tuần'),
-                      icon: Icon(Icons.view_week_outlined),
-                    ),
-                    ButtonSegment<StatisticsRange>(
-                      value: StatisticsRange.monthly,
-                      label: Text('Tháng'),
-                      icon: Icon(Icons.calendar_month_outlined),
-                    ),
-                  ],
-                  selected: {_selectedRange},
-                  onSelectionChanged: (selection) {
-                    setState(() => _selectedRange = selection.first);
-                  },
-                ),
-                child: _TimeChart(
-                  totals: periodTotals,
-                  currency: currency,
-                  selectedRange: _selectedRange,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _OverviewCard extends StatelessWidget {
-  const _OverviewCard({
-    required this.totalExpense,
-    required this.totalTransactions,
-    required this.topCategory,
-    required this.topCategoryAmount,
-    required this.currency,
-  });
-
-  final double totalExpense;
-  final int totalTransactions;
-  final String topCategory;
-  final double topCategoryAmount;
-  final NumberFormat currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1D4ED8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('TH5 - Nhóm G1C4'),
+            SizedBox(height: 2),
+            Text('Thống kê', style: TextStyle(fontSize: 12)),
+          ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Báo cáo chi tiêu',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white70,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            currency.format(totalExpense),
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _MetricChip(
-                label: 'Số giao dịch',
-                value: '$totalTransactions',
-              ),
-              _MetricChip(
-                label: 'Chi nhiều nhất',
-                value: topCategory,
-              ),
-              _MetricChip(
-                label: 'Mức cao nhất',
-                value: currency.format(topCategoryAmount),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ValueListenableBuilder(
+          valueListenable: db.transactions,
+          builder: (context, List<TransactionModel> txs, _) {
+            if (txs.isEmpty) {
+              return const Center(child: Text('Không có dữ liệu'));
+            }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-    this.action,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget child;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+            // Chart + aggregation
+            final Map<String, double> byCategory = {};
+            for (var t in txs) {
+              byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
+            }
+            final items = byCategory.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
@@ -354,100 +171,43 @@ class _CategoryChart extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${percentage.toStringAsFixed(1)}%',
-                  style: const TextStyle(color: Colors.black54),
+                  'Tổng thu: ${currency.format(db.totalIncome)}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  currency.format(item.value),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  'Tổng chi: ${currency.format(db.totalExpense)}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
                 ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-class _TimeChart extends StatelessWidget {
-  const _TimeChart({
-    required this.totals,
-    required this.currency,
-    required this.selectedRange,
-  });
-
-  final Map<String, double> totals;
-  final NumberFormat currency;
-  final StatisticsRange selectedRange;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = totals.entries.toList();
-    final maxValue = entries.fold<double>(
-      0,
-      (max, item) => item.value > max ? item.value : max,
-    );
-
-    return Column(
-      children: [
-        SizedBox(
-          height: 260,
-          child: BarChart(
-            BarChartData(
-              maxY: maxValue == 0 ? 10 : maxValue * 1.2,
-              alignment: BarChartAlignment.spaceAround,
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                horizontalInterval: maxValue == 0 ? 2 : maxValue / 4,
-              ),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 54,
-                    interval: maxValue == 0 ? 2 : maxValue / 4,
-                    getTitlesWidget: (value, meta) {
-                      if (value == 0) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(
-                          _compactCurrency(value),
-                          style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 11,
-                          ),
-                        ),
-                      );
-                    },
+                const SizedBox(height: 12),
+                // Chart showing recent spending
+                ExpenseChart(transactions: txs),
+                const SizedBox(height: 12),
+                Text(
+                  'Chi tiêu theo danh mục',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (value, meta) {
-                      final index = value.toInt();
-                      if (index < 0 || index >= entries.length) {
-                        return const SizedBox.shrink();
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          entries[index].key,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final e = items[i];
+                      return ListTile(
+                        title: Text(e.key),
+                        trailing: Text(
+                          currency.format(e.value),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                         ),
                       );
                     },
