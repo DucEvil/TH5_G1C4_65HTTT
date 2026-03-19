@@ -1,8 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../widgets/expense_chart.dart';
-
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 
@@ -35,7 +33,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -49,52 +46,27 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: ValueListenableBuilder(
+        child: ValueListenableBuilder<List<TransactionModel>>(
           valueListenable: db.transactions,
-          builder: (context, List<TransactionModel> txs, _) {
-            if (txs.isEmpty) {
-              return const Center(child: Text('Không có dữ liệu'));
-            }
-
-            // Chart + aggregation
-            final Map<String, double> byCategory = {};
-            for (var t in txs) {
-              byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
-            }
-            final items = byCategory.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value));
+          builder: (context, txs, _) {
+            if (txs.isEmpty) return const _EmptyStatisticsState();
+            final totals = _aggregateByCategory(txs);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  'Biểu đồ theo danh mục',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                if (action != null) ...[
-                  const SizedBox(width: 12),
-                  Flexible(child: action!),
-                ],
+                const SizedBox(height: 12),
+                _CategoryChart(
+                  totals: totals,
+                  currency: currency,
+                  colors: _chartColors,
+                ),
               ],
-            ),
-            const SizedBox(height: 18),
-            child,
-          ],
+            );
+          },
         ),
       ),
     );
@@ -114,28 +86,28 @@ class _CategoryChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = totals.values.fold<double>(0, (sum, amount) => sum + amount);
+    final total = totals.values.fold<double>(0, (s, v) => s + v);
     final entries = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: 240,
+          height: 220,
           child: PieChart(
             PieChartData(
-              centerSpaceRadius: 52,
-              sectionsSpace: 3,
+              centerSpaceRadius: 48,
+              sectionsSpace: 4,
               pieTouchData: PieTouchData(enabled: false),
               sections: List.generate(entries.length, (index) {
-                final item = entries[index];
-                final percentage = total == 0 ? 0.0 : item.value / total * 100;
-
+                final e = entries[index];
+                final pct = total == 0 ? 0.0 : e.value / total * 100;
                 return PieChartSectionData(
                   color: colors[index % colors.length],
-                  value: item.value,
-                  radius: 72,
-                  title: '${percentage.toStringAsFixed(0)}%',
+                  value: e.value,
+                  radius: 60,
+                  title: '${pct.toStringAsFixed(0)}%',
                   titleStyle: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -146,110 +118,29 @@ class _CategoryChart extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        ...List.generate(entries.length, (index) {
-          final item = entries[index];
-          final percentage = total == 0 ? 0.0 : item.value / total * 100;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+        const SizedBox(height: 12),
+        ...entries.map(
+          (e) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 Container(
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: colors[index % colors.length],
-                    borderRadius: BorderRadius.circular(99),
+                    color: colors[entries.indexOf(e) % colors.length],
+                    borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    item.key,
+                    e.key,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 Text(
-                  'Tổng thu: ${currency.format(db.totalIncome)}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Tổng chi: ${currency.format(db.totalExpense)}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
-                ),
-                const SizedBox(height: 12),
-                // Chart showing recent spending
-                ExpenseChart(transactions: txs),
-                const SizedBox(height: 12),
-                Text(
-                  'Chi tiêu theo danh mục',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final e = items[i];
-                      return ListTile(
-                        title: Text(e.key),
-                        trailing: Text(
-                          currency.format(e.value),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(color: cs.onSurface),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              barGroups: List.generate(entries.length, (index) {
-                final item = entries[index];
-
-                return BarChartGroupData(
-                  x: index,
-                  barRods: [
-                    BarChartRodData(
-                      toY: item.value,
-                      width: selectedRange == StatisticsRange.weekly ? 22 : 18,
-                      borderRadius: BorderRadius.circular(8),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF22C55E), Color(0xFF0EA5E9)],
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...entries.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    item.key,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Text(
-                  currency.format(item.value),
+                  currency.format(e.value),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ],
@@ -259,16 +150,16 @@ class _CategoryChart extends StatelessWidget {
       ],
     );
   }
+}
 
-  String _compactCurrency(double value) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(0)}K';
-    }
-    return value.toStringAsFixed(0);
+String _compactCurrency(double value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
   }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(0)}K';
+  }
+  return value.toStringAsFixed(0);
 }
 
 class _EmptyStatisticsState extends StatelessWidget {
