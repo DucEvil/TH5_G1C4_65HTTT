@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/home_screen.dart';
 import 'screens/add_transaction_screen.dart';
 import 'screens/transaction_list_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'services/database_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // initialize intl date formatting for Vietnamese locale
+  await initializeDateFormatting('vi_VN');
   // initialize local persistence for transactions
-  DatabaseService.initialize();
+  await DatabaseService.initialize();
   runApp(const MyApp());
 }
 
@@ -20,8 +23,16 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Finance Manager',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 0,
+        ),
       ),
       home: const MainPage(),
       routes: {

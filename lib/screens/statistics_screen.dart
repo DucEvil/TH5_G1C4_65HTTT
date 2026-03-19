@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/database_service.dart';
 import '../models/transaction.dart';
 import 'package:intl/intl.dart';
+import '../widgets/expense_chart.dart';
 
 class StatisticsScreen extends StatelessWidget {
   static const routeName = '/statistics';
@@ -20,7 +21,8 @@ class StatisticsScreen extends StatelessWidget {
           builder: (context, List<TransactionModel> txs, _) {
             if (txs.isEmpty)
               return const Center(child: Text('Không có dữ liệu'));
-            // Simple aggregation: total by category
+
+            // Chart + aggregation
             final Map<String, double> byCategory = {};
             for (var t in txs) {
               byCategory[t.category] = (byCategory[t.category] ?? 0) + t.amount;
@@ -38,7 +40,10 @@ class StatisticsScreen extends StatelessWidget {
                   'Tổng chi: ${currency.format(db.totalExpense)}',
                   style: const TextStyle(color: Colors.red),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                // Chart showing recent spending
+                ExpenseChart(transactions: txs),
+                const SizedBox(height: 12),
                 const Text(
                   'Chi tiêu theo danh mục',
                   style: TextStyle(fontWeight: FontWeight.bold),

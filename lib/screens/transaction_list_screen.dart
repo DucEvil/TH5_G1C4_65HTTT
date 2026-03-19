@@ -29,7 +29,14 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Danh sách giao dịch'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('TH5 - Nhóm G1C4'),
+            SizedBox(height: 2),
+            Text('Danh sách giao dịch', style: TextStyle(fontSize: 12)),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (s) {
@@ -154,11 +161,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        title: Text(t.title.isEmpty ? t.category : t.title),
+                        title: Text(t.title),
                         subtitle: Text(
-                          t.note == null || t.note!.isEmpty
-                              ? _subtitleDate(t)
-                              : '${t.note} • ${_subtitleDate(t)}',
+                          '${t.category}${t.note != null && t.note!.isNotEmpty ? ' • ${t.note}' : ''} • ${_subtitleDate(t)}',
                         ),
                         trailing: Text(
                           (t.type == TransactionType.income ? '+ ' : '- ') +

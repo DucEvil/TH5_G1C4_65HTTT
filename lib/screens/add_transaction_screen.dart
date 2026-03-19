@@ -110,8 +110,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          title: Text(
-            widget.editing == null ? 'Thêm chi tiêu' : 'Sửa chi tiêu',
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('TH5 - Nhóm G1C4'),
+              const SizedBox(height: 2),
+              Text(
+                widget.editing == null ? 'Thêm chi tiêu' : 'Sửa chi tiêu',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
           ),
           elevation: 0,
           backgroundColor: Colors.white,
@@ -129,12 +137,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Title - borderless, like a paper note
+                  // Title
                   TextField(
                     controller: _titleCtrl,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Tiêu đề (ví dụ: Mua cafe)',
-                      border: InputBorder.none,
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                     style: const TextStyle(
                       fontSize: 18,
@@ -142,16 +159,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Amount - borderless
+                  // Amount
                   TextField(
                     controller: _amountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Số tiền',
-                      border: InputBorder.none,
-                      prefixIcon: Icon(Icons.attach_money),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      prefixIcon: const Icon(Icons.attach_money),
+                      suffixText: 'VNĐ',
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                     style: const TextStyle(fontSize: 16),
                   ),
@@ -161,8 +188,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       Expanded(
                         child: DropdownButtonFormField<TransactionType>(
                           value: _type,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                           items: const [
                             DropdownMenuItem(
@@ -183,8 +219,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _category,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                           items: kDefaultCategories
                               .map(
@@ -203,9 +248,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   // Note
                   TextField(
                     controller: _noteCtrl,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Ghi chú (tuỳ chọn)',
-                      border: InputBorder.none,
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -223,7 +277,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  // Hint: no save button - auto-save on back
                   const Text(
                     'Tự động lưu khi bạn quay lại',
                     style: TextStyle(color: Colors.grey, fontSize: 12),

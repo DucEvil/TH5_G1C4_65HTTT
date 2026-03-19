@@ -14,13 +14,13 @@ class DatabaseService {
   final ValueNotifier<List<TransactionModel>> transactions = ValueNotifier([]);
 
   // load persisted data when service is created
-  void _init() {
-    _loadFromStorage();
+  Future<void> _init() async {
+    await _loadFromStorage();
   }
 
   // trigger init on singleton creation
   // ignore: prefer_constructors_over_static_methods
-  static void initialize() => instance._init();
+  static Future<void> initialize() => instance._init();
 
   List<TransactionModel> get all => transactions.value;
 

@@ -34,7 +34,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Trang chính')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('TH5 - Nhóm G1C4'),
+            SizedBox(height: 2),
+            Text('Trang chính', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -71,7 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-                onChanged: (v) => setState(() => searchQuery = v.trim().toLowerCase()),
+                onChanged: (v) =>
+                    setState(() => searchQuery = v.trim().toLowerCase()),
               ),
             ),
             const SizedBox(height: 8),
@@ -81,33 +91,47 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, txs, _) {
                   var recent = List.of(txs.reversed).take(6).toList();
                   if (searchQuery.isNotEmpty) {
-                    recent = recent.where((t) => t.title.toLowerCase().contains(searchQuery)).toList();
+                    recent = recent
+                        .where(
+                          (t) => t.title.toLowerCase().contains(searchQuery),
+                        )
+                        .toList();
                   }
                   if (recent.isEmpty) {
                     return const Center(child: Text('Không có giao dịch'));
                   }
                   return ListView.separated(
                     itemCount: recent.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final t = recent[index];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: t.type == TransactionType.income ? Colors.green : Colors.red,
+                          backgroundColor: t.type == TransactionType.income
+                              ? Colors.green
+                              : Colors.red,
                           child: Icon(
-                            t.type == TransactionType.income ? Icons.arrow_downward : Icons.arrow_upward,
+                            t.type == TransactionType.income
+                                ? Icons.arrow_downward
+                                : Icons.arrow_upward,
                             color: Colors.white,
                           ),
                         ),
-                        title: Text(t.category + ' • ' + (t.note ?? '')),
-                        subtitle: Text(_subtitleDate(t)),
+                        title: Text(t.title),
+                        subtitle: Text(
+                          '${t.category}${t.note != null && t.note!.isNotEmpty ? ' • ${t.note}' : ''} • ${_subtitleDate(t)}',
+                        ),
                         trailing: Text(
-                          (t.type == TransactionType.income ? '+ ' : '- ') + currency.format(t.amount),
+                          (t.type == TransactionType.income ? '+ ' : '- ') +
+                              currency.format(t.amount),
                         ),
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => AddTransactionScreen(editing: t)),
+                            MaterialPageRoute(
+                              builder: (_) => AddTransactionScreen(editing: t),
+                            ),
                           );
                         },
                       );
@@ -158,7 +182,10 @@ class _BalanceCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tổng thu', style: TextStyle(color: Colors.green)),
+                    const Text(
+                      'Tổng thu',
+                      style: TextStyle(color: Colors.green),
+                    ),
                     Text(currency.format(income)),
                   ],
                 ),
