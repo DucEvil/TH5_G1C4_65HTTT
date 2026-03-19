@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/home_screen.dart';
 import 'screens/add_transaction_screen.dart';
 import 'screens/transaction_list_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'services/database_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // initialize local persistence for transactions
   DatabaseService.initialize();
+  // initialize locale data for date formatting
+  await initializeDateFormatting('vi_VN');
   runApp(const MyApp());
 }
 

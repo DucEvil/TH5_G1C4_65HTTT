@@ -16,38 +16,29 @@ class AddTransactionScreen extends StatefulWidget {
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  // no explicit Form validation; using auto-save and simple inputs
-  final _titleCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   TransactionType _type = TransactionType.expense;
   String _category = kDefaultCategories.first;
   DateTime _date = DateTime.now();
-
-  bool _dirty = false; // tracked changes
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.editing;
     if (e != null) {
-      _titleCtrl.text = e.title;
       _amountCtrl.text = e.amount.toString();
       _noteCtrl.text = e.note ?? '';
       _type = e.type;
       _category = e.category;
       _date = e.date;
     }
-
-    // mark dirty when fields change
-    _titleCtrl.addListener(() => _dirty = true);
-    _amountCtrl.addListener(() => _dirty = true);
-    _noteCtrl.addListener(() => _dirty = true);
   }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
@@ -63,172 +54,180 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (d != null) setState(() => _date = d);
   }
 
-  Future<void> _autoSaveIfNeeded() async {
-    // Only save if user made changes and at least amount > 0 or title/note not empty
-    final amount = double.tryParse(_amountCtrl.text) ?? 0.0;
-    final hasContent =
-        amount > 0 ||
-        _titleCtrl.text.trim().isNotEmpty ||
-        _noteCtrl.text.trim().isNotEmpty;
-    if (!_dirty && widget.editing == null) return;
-    if (!hasContent) return;
+  Future<void> _saveTransaction() async {
+    if (_isSaving) return;
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) return;
 
-    final id = widget.editing?.id ?? DateTime.now().toIso8601String();
+    final amount = double.parse(_amountCtrl.text.trim().replaceAll(',', ''));
+    final note = _noteCtrl.text.trim();
+    final id =
+        widget.editing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     final now = DateTime.now();
+
     final tx = TransactionModel(
       id: id,
       amount: amount,
       type: _type,
-      title: _titleCtrl.text.isEmpty ? _category : _titleCtrl.text,
+      title: _category,
       category: _category,
-      note: _noteCtrl.text.isEmpty ? null : _noteCtrl.text,
+      note: note.isEmpty ? null : note,
       date: _date,
       createdAt: widget.editing?.createdAt ?? now,
       updatedAt: now,
     );
 
+    setState(() => _isSaving = true);
     final db = DatabaseService.instance;
     if (widget.editing == null) {
       db.add(tx);
     } else {
       db.update(id, tx);
     }
-  }
 
-  Future<bool> _onWillPop() async {
-    await _autoSaveIfNeeded();
-    // allow pop
-    return true;
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
     final dateText = DateFormat.yMMMMd('vi_VN').format(_date);
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: Scaffold(
-        backgroundColor: Colors.grey[50],
-        appBar: AppBar(
-          title: Text(
-            widget.editing == null ? 'Thêm chi tiêu' : 'Sửa chi tiêu',
-          ),
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Text(
+          widget.editing == null ? 'Thêm giao dịch' : 'Sửa giao dịch',
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            elevation: 6,
+            elevation: 4,
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Title - borderless, like a paper note
-                  TextField(
-                    controller: _titleCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Tiêu đề (ví dụ: Mua cafe)',
-                      border: InputBorder.none,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Amount - borderless
-                  TextField(
-                    controller: _amountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: 'Số tiền',
-                      border: InputBorder.none,
-                      prefixIcon: Icon(Icons.attach_money),
-                    ),
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<TransactionType>(
-                          value: _type,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: TransactionType.income,
-                              child: Text('Thu'),
-                            ),
-                            DropdownMenuItem(
-                              value: TransactionType.expense,
-                              child: Text('Chi'),
-                            ),
-                          ],
-                          onChanged: (v) => setState(
-                            () => _type = v ?? TransactionType.expense,
-                          ),
-                        ),
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: _amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _category,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                          ),
-                          items: kDefaultCategories
-                              .map(
-                                (c) =>
-                                    DropdownMenuItem(value: c, child: Text(c)),
+                      decoration: const InputDecoration(
+                        labelText: 'Số tiền',
+                        prefixIcon: Icon(Icons.payments_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        final raw = (value ?? '').trim().replaceAll(',', '');
+                        if (raw.isEmpty) return 'Vui lòng nhập số tiền';
+                        final amount = double.tryParse(raw);
+                        if (amount == null) return 'Số tiền không hợp lệ';
+                        if (amount <= 0) return 'Số tiền phải lớn hơn 0';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<TransactionType>(
+                      initialValue: _type,
+                      decoration: const InputDecoration(
+                        labelText: 'Loại giao dịch',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: TransactionType.income,
+                          child: Text('Thu'),
+                        ),
+                        DropdownMenuItem(
+                          value: TransactionType.expense,
+                          child: Text('Chi'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _type = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _category,
+                      decoration: const InputDecoration(
+                        labelText: 'Danh mục',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: kDefaultCategories
+                          .map(
+                            (c) => DropdownMenuItem(value: c, child: Text(c)),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _category = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _noteCtrl,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Ghi chú',
+                        hintText: 'Tuỳ chọn',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if ((value ?? '').trim().length > 200) {
+                          return 'Ghi chú tối đa 200 ký tự';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Ngày',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.calendar_today_outlined),
+                        ),
+                        child: Text(dateText),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _isSaving ? null : _saveTransaction,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
-                              .toList(),
-                          onChanged: (v) => setState(
-                            () => _category = v ?? kDefaultCategories.first,
-                          ),
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          _isSaving ? 'Đang lưu...' : 'Lưu giao dịch',
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Note
-                  TextField(
-                    controller: _noteCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Ghi chú (tuỳ chọn)',
-                      border: InputBorder.none,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Ngày: $dateText',
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      TextButton(
-                        onPressed: _pickDate,
-                        child: const Text('Chọn'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  // Hint: no save button - auto-save on back
-                  const Text(
-                    'Tự động lưu khi bạn quay lại',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
