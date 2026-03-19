@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 import '../models/transaction.dart';
 import 'add_transaction_screen.dart';
 import 'package:intl/intl.dart';
@@ -32,9 +33,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: () async {
+              await AuthService.instance.signOut();
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
@@ -43,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text('Trang chính', style: TextStyle(fontSize: 12)),
           ],
         ),
+        surfaceTintColor: cs.primary,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -70,15 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
               child: TextField(
                 controller: searchCtrl,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Tìm kiếm...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
+                  prefixIcon: Icon(Icons.search),
                 ),
                 onChanged: (v) =>
                     setState(() => searchQuery = v.trim().toLowerCase()),
@@ -109,8 +115,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: t.type == TransactionType.income
-                              ? Colors.green
-                              : Colors.red,
+                              ? cs.secondary
+                              : cs.error,
                           child: Icon(
                             t.type == TransactionType.income
                                 ? Icons.arrow_downward
@@ -118,9 +124,33 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        title: Text(t.title),
-                        subtitle: Text(
-                          '${t.category}${t.note != null && t.note!.isNotEmpty ? ' • ${t.note}' : ''} • ${_subtitleDate(t)}',
+                        title: Text(
+                          t.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (t.note != null && t.note!.isNotEmpty)
+                              Text(
+                                t.note!,
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            Text(
+                              '${t.category} • ${_subtitleDate(t)}',
+                              style: TextStyle(
+                                color: cs.onSurface.withAlpha(
+                                  (0.7 * 255).round(),
+                                ),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                         trailing: Text(
                           (t.type == TransactionType.income ? '+ ' : '- ') +
@@ -158,11 +188,12 @@ class _BalanceCard extends StatelessWidget {
     required this.income,
     required this.expense,
     required this.currency,
-    super.key,
+    // key intentionally omitted to silence unused-key analyzer warning
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -182,17 +213,14 @@ class _BalanceCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Tổng thu',
-                      style: TextStyle(color: Colors.green),
-                    ),
+                    Text('Tổng thu', style: TextStyle(color: cs.secondary)),
                     Text(currency.format(income)),
                   ],
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tổng chi', style: TextStyle(color: Colors.red)),
+                    Text('Tổng chi', style: TextStyle(color: cs.error)),
                     Text(currency.format(expense)),
                   ],
                 ),

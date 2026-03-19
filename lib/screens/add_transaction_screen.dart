@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+// no local file storage required
+
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/transaction.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../data/categories.dart';
 
@@ -65,12 +69,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _autoSaveIfNeeded() async {
     // Only save if user made changes and at least amount > 0 or title/note not empty
-    final amount = double.tryParse(_amountCtrl.text) ?? 0.0;
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+    final titleText = _titleCtrl.text.trim();
+    final noteText = _noteCtrl.text.trim();
     final hasContent =
-        amount > 0 ||
-        _titleCtrl.text.trim().isNotEmpty ||
-        _noteCtrl.text.trim().isNotEmpty;
-    if (!_dirty && widget.editing == null) return;
+        amount > 0 || titleText.isNotEmpty || noteText.isNotEmpty;
+    // Only save when user actually changed something and there is content
+    if (!_dirty) return;
     if (!hasContent) return;
 
     final id = widget.editing?.id ?? DateTime.now().toIso8601String();
@@ -79,9 +84,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       id: id,
       amount: amount,
       type: _type,
-      title: _titleCtrl.text.isEmpty ? _category : _titleCtrl.text,
+      title: titleText.isEmpty ? _category : titleText,
       category: _category,
-      note: _noteCtrl.text.isEmpty ? null : _noteCtrl.text,
+      note: noteText.isEmpty ? null : noteText,
       date: _date,
       createdAt: widget.editing?.createdAt ?? now,
       updatedAt: now,
@@ -93,6 +98,39 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } else {
       db.update(id, tx);
     }
+
+    // also save transaction to Firestore for cloud sync
+    try {
+      final ownerId = AuthService.instance.currentUid;
+      final docRef = FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(id);
+      await docRef.set({
+        'id': tx.id,
+        'amount': tx.amount,
+        'type': tx.type == TransactionType.income ? 'income' : 'expense',
+        'title': tx.title,
+        'category': tx.category,
+        'note': tx.note,
+        'date': Timestamp.fromDate(tx.date),
+        'createdAt': Timestamp.fromDate(tx.createdAt),
+        'updatedAt': Timestamp.fromDate(tx.updatedAt),
+        'owner': ownerId,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu lên Firestore')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi lưu Firestore: $e')));
+      }
+    }
+
+    // no file attachments to attach (storage disabled)
   }
 
   Future<bool> _onWillPop() async {
@@ -105,6 +143,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget build(BuildContext context) {
     final dateText = DateFormat.yMMMMd('vi_VN').format(_date);
 
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
@@ -141,23 +180,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   TextField(
                     controller: _titleCtrl,
                     decoration: InputDecoration(
-                      hintText: 'Tiêu đề (ví dụ: Mua cafe)',
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
+                      labelText: 'Tiêu đề',
+                      hintText: 'ví dụ: Mua cafe',
                     ),
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
+                    maxLines: 1,
+                    textInputAction: TextInputAction.next,
                   ),
+                  // Attachments disabled (no image uploads)
                   const SizedBox(height: 8),
                   // Amount
                   TextField(
@@ -187,7 +220,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<TransactionType>(
-                          value: _type,
+                          initialValue: _type,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -218,7 +251,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _category,
+                          initialValue: _category,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -245,22 +278,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Note
+                  // Note (limit visible lines to 3; extra text scrolls)
                   TextField(
                     controller: _noteCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Ghi chú (tuỳ chọn)',
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: InputDecoration(hintText: 'Ghi chú (tuỳ chọn)'),
                   ),
                   const SizedBox(height: 8),
                   Row(

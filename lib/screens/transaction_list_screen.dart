@@ -27,6 +27,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -59,15 +60,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Tìm kiếm...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                prefixIcon: Icon(Icons.search),
               ),
               onChanged: (q) =>
                   setState(() => _searchQuery = q.trim().toLowerCase()),
@@ -91,16 +86,16 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(
                           Icons.note_alt_outlined,
                           size: 96,
-                          color: Colors.black12,
+                          color: cs.onSurface.withAlpha((0.12 * 255).round()),
                         ),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text(
                           'Bạn chưa có ghi chú nào, hãy tạo mới nhé!',
-                          style: TextStyle(color: Colors.black54),
+                          style: TextStyle(color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -115,13 +110,13 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                     return Dismissible(
                       key: Key(t.id),
                       background: Container(
-                        color: Colors.red,
+                        color: cs.error,
                         alignment: Alignment.centerLeft,
                         padding: const EdgeInsets.only(left: 16),
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
                       secondaryBackground: Container(
-                        color: Colors.red,
+                        color: cs.error,
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 16),
                         child: const Icon(Icons.delete, color: Colors.white),
@@ -152,8 +147,8 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: t.type == TransactionType.income
-                              ? Colors.green
-                              : Colors.red,
+                              ? cs.secondary
+                              : cs.error,
                           child: Icon(
                             t.type == TransactionType.income
                                 ? Icons.arrow_downward
@@ -161,9 +156,33 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        title: Text(t.title),
-                        subtitle: Text(
-                          '${t.category}${t.note != null && t.note!.isNotEmpty ? ' • ${t.note}' : ''} • ${_subtitleDate(t)}',
+                        title: Text(
+                          t.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (t.note != null && t.note!.isNotEmpty)
+                              Text(
+                                t.note!,
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            Text(
+                              '${t.category} • ${_subtitleDate(t)}',
+                              style: TextStyle(
+                                color: cs.onSurface.withAlpha(
+                                  (0.7 * 255).round(),
+                                ),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                         trailing: Text(
                           (t.type == TransactionType.income ? '+ ' : '- ') +

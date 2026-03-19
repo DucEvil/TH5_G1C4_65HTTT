@@ -37,6 +37,11 @@ dependencies:
   shared_preferences: ^2.1.1
   intl: ^0.18.0
   fl_chart: ^1.2.0
+  firebase_core: ^4.5.0
+  cloud_firestore: ^6.1.3
+  firebase_auth: ^6.2.0
+  # image_picker: ^0.8.7+5  # removed (no image attachments)
+  # google_mlkit_text_recognition: ^0.7.0  # temporarily disabled due to Android AGP namespace issue
 
 dev_dependencies:
   flutter_test:

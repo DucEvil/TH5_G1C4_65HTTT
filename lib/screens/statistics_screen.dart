@@ -12,15 +12,26 @@ class StatisticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final db = DatabaseService.instance;
     final currency = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Thống kê')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('TH5 - Nhóm G1C4'),
+            SizedBox(height: 2),
+            Text('Thống kê', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ValueListenableBuilder(
           valueListenable: db.transactions,
           builder: (context, List<TransactionModel> txs, _) {
-            if (txs.isEmpty)
+            if (txs.isEmpty) {
               return const Center(child: Text('Không có dữ liệu'));
+            }
 
             // Chart + aggregation
             final Map<String, double> byCategory = {};
@@ -34,19 +45,25 @@ class StatisticsScreen extends StatelessWidget {
               children: [
                 Text(
                   'Tổng thu: ${currency.format(db.totalIncome)}',
-                  style: const TextStyle(color: Colors.green),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
                 ),
                 Text(
                   'Tổng chi: ${currency.format(db.totalExpense)}',
-                  style: const TextStyle(color: Colors.red),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: cs.onSurface),
                 ),
                 const SizedBox(height: 12),
                 // Chart showing recent spending
                 ExpenseChart(transactions: txs),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'Chi tiêu theo danh mục',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
@@ -58,7 +75,12 @@ class StatisticsScreen extends StatelessWidget {
                       final e = items[i];
                       return ListTile(
                         title: Text(e.key),
-                        trailing: Text(currency.format(e.value)),
+                        trailing: Text(
+                          currency.format(e.value),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                        ),
                       );
                     },
                   ),

@@ -58,7 +58,18 @@ class _ExpenseChartState extends State<ExpenseChart> {
                       child: Text(
                         'Không có dữ liệu',
                         style: TextStyle(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: Color.fromRGBO(
+                            (theme.colorScheme.onSurface.r * 255.0)
+                                .round()
+                                .clamp(0, 255),
+                            (theme.colorScheme.onSurface.g * 255.0)
+                                .round()
+                                .clamp(0, 255),
+                            (theme.colorScheme.onSurface.b * 255.0)
+                                .round()
+                                .clamp(0, 255),
+                            0.6,
+                          ),
                         ),
                       ),
                     )
@@ -84,8 +95,9 @@ class _ExpenseChartState extends State<ExpenseChart> {
                               showTitles: true,
                               getTitlesWidget: (v, meta) {
                                 final idx = v.toInt();
-                                if (idx < 0 || idx >= series.labels.length)
+                                if (idx < 0 || idx >= series.labels.length) {
                                   return const SizedBox.shrink();
+                                }
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 6.0),
                                   child: Text(
@@ -117,8 +129,30 @@ class _ExpenseChartState extends State<ExpenseChart> {
                               show: true,
                               gradient: LinearGradient(
                                 colors: [
-                                  theme.colorScheme.primary.withOpacity(0.2),
-                                  theme.colorScheme.primary.withOpacity(0.0),
+                                  Color.fromRGBO(
+                                    (theme.colorScheme.primary.r * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    (theme.colorScheme.primary.g * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    (theme.colorScheme.primary.b * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    0.2,
+                                  ),
+                                  Color.fromRGBO(
+                                    (theme.colorScheme.primary.r * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    (theme.colorScheme.primary.g * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    (theme.colorScheme.primary.b * 255.0)
+                                        .round()
+                                        .clamp(0, 255),
+                                    0.0,
+                                  ),
                                 ],
                               ),
                             ),
@@ -151,7 +185,9 @@ class _ExpenseChartState extends State<ExpenseChart> {
       for (var t in txs) {
         if (t.type != TransactionType.expense) continue;
         final d = DateTime(t.date.year, t.date.month, t.date.day);
-        if (map.containsKey(d)) map[d] = (map[d] ?? 0) + t.amount;
+        if (map.containsKey(d)) {
+          map[d] = (map[d] ?? 0) + t.amount;
+        }
       }
       final labels = map.keys
           .map((d) => DateFormat.Md('vi_VN').format(d))
@@ -181,7 +217,9 @@ class _ExpenseChartState extends State<ExpenseChart> {
       for (var t in txs) {
         if (t.type != TransactionType.expense) continue;
         final key = '${t.date.year}-${t.date.month}';
-        if (map.containsKey(key)) map[key] = (map[key] ?? 0) + t.amount;
+        if (map.containsKey(key)) {
+          map[key] = (map[key] ?? 0) + t.amount;
+        }
       }
       final labels = map.keys.map((k) {
         final parts = k.split('-');
@@ -212,8 +250,9 @@ class _ExpenseChartState extends State<ExpenseChart> {
       }
       for (var t in txs) {
         if (t.type != TransactionType.expense) continue;
-        if (map.containsKey(t.date.year))
+        if (map.containsKey(t.date.year)) {
           map[t.date.year] = (map[t.date.year] ?? 0) + t.amount;
+        }
       }
       final labels = map.keys.map((y) => y.toString()).toList();
       final spots = <FlSpot>[];
