@@ -20,38 +20,29 @@ class AddTransactionScreen extends StatefulWidget {
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  // no explicit Form validation; using auto-save and simple inputs
-  final _titleCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   TransactionType _type = TransactionType.expense;
   String _category = kDefaultCategories.first;
   DateTime _date = DateTime.now();
-
-  bool _dirty = false; // tracked changes
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.editing;
     if (e != null) {
-      _titleCtrl.text = e.title;
       _amountCtrl.text = e.amount.toString();
       _noteCtrl.text = e.note ?? '';
       _type = e.type;
       _category = e.category;
       _date = e.date;
     }
-
-    // mark dirty when fields change
-    _titleCtrl.addListener(() => _dirty = true);
-    _amountCtrl.addListener(() => _dirty = true);
-    _noteCtrl.addListener(() => _dirty = true);
   }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
@@ -78,8 +69,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (!_dirty) return;
     if (!hasContent) return;
 
-    final id = widget.editing?.id ?? DateTime.now().toIso8601String();
+    final amount = double.parse(_amountCtrl.text.trim().replaceAll(',', ''));
+    final note = _noteCtrl.text.trim();
+    final id =
+        widget.editing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     final now = DateTime.now();
+
     final tx = TransactionModel(
       id: id,
       amount: amount,
@@ -92,6 +87,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       updatedAt: now,
     );
 
+    setState(() => _isSaving = true);
     final db = DatabaseService.instance;
     if (widget.editing == null) {
       db.add(tx);
@@ -133,10 +129,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     // no file attachments to attach (storage disabled)
   }
 
-  Future<bool> _onWillPop() async {
-    await _autoSaveIfNeeded();
-    // allow pop
-    return true;
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    Navigator.pop(context, true);
   }
 
   @override
@@ -164,13 +159,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            elevation: 6,
+            elevation: 4,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -247,6 +247,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             () => _type = v ?? TransactionType.expense,
                           ),
                         ),
+                        child: Text(dateText),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -269,10 +270,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 (c) =>
                                     DropdownMenuItem(value: c, child: Text(c)),
                               )
-                              .toList(),
-                          onChanged: (v) => setState(
-                            () => _category = v ?? kDefaultCategories.first,
-                          ),
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          _isSaving ? 'Đang lưu...' : 'Lưu giao dịch',
                         ),
                       ),
                     ],
