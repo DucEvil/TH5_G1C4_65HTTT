@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Transactions: only authenticated users can create/read/update/delete
+    // and they may only access documents where `owner` == request.auth.uid
+    match /transactions/{txnId} {
+      allow create: if request.auth != null
+                    && request.resource.data.owner == request.auth.uid;
+
+      allow read: if request.auth != null
+                  && resource.data.owner == request.auth.uid;
+
+      allow update: if request.auth != null
+                    && resource.data.owner == request.auth.uid
+                    && request.resource.data.owner == resource.data.owner;
+
+      allow delete: if request.auth != null
+                    && resource.data.owner == request.auth.uid;
+    }
+
+    // Default: deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

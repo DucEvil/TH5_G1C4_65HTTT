@@ -1,6 +1,14 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:signature/signature.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/calendar_service.dart';
+import '../services/cloudinary_service.dart';
 
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
@@ -25,20 +33,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   TransactionType _type = TransactionType.expense;
   String _category = kDefaultCategories.first;
   DateTime _date = DateTime.now();
+  TimeOfDay _time = TimeOfDay.fromDateTime(DateTime.now());
   bool _isSaving = false;
   bool _dirty = false;
+  File? _imageFile;
+  File? _pickedFile;
+  Uint8List? _handwritingBytes;
+  final TextEditingController _presetCtrl = TextEditingController();
+  final SignatureController _signatureCtrl = SignatureController(
+    penStrokeWidth: 2,
+    penColor: Colors.black,
+    exportBackgroundColor: Colors.white,
+  );
 
   @override
   void initState() {
     super.initState();
     final e = widget.editing;
     if (e != null) {
-      _titleCtrl.text = e.title ?? '';
+      _titleCtrl.text = e.title;
       _amountCtrl.text = e.amount.toString();
       _noteCtrl.text = e.note ?? '';
       _type = e.type;
       _category = e.category;
       _date = e.date;
+      _time = TimeOfDay.fromDateTime(e.date);
     }
     _titleCtrl.addListener(() => _dirty = true);
     _amountCtrl.addListener(() => _dirty = true);
@@ -50,7 +69,120 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _titleCtrl.dispose();
     _amountCtrl.dispose();
     _noteCtrl.dispose();
+    _presetCtrl.dispose();
+    _signatureCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final x = await picker.pickImage(source: source);
+    if (x == null) return;
+    setState(() {
+      _imageFile = File(x.path);
+      _dirty = true;
+    });
+  }
+
+  Future<void> _showImageSourcePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Chọn từ thư viện'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _pickImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Chụp ảnh bằng camera'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _pickImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAnyFile() async {
+    final r = await FilePicker.platform.pickFiles(withData: false);
+    if (r == null || r.files.isEmpty || r.files.first.path == null) return;
+    setState(() {
+      _pickedFile = File(r.files.first.path!);
+      _dirty = true;
+    });
+  }
+
+  Future<void> _captureHandwriting() async {
+    final result = await showDialog<Uint8List>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Chữ viết tay'),
+          content: SizedBox(
+            width: 320,
+            height: 220,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Signature(
+                      controller: _signatureCtrl,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => _signatureCtrl.clear(),
+                      child: const Text('Xóa nét'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Hủy'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final nav = Navigator.of(context);
+                        final bytes = await _signatureCtrl.toPngBytes();
+                        if (!mounted) return;
+                        nav.pop(bytes);
+                      },
+                      child: const Text('Lưu'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    _signatureCtrl.clear();
+    if (result == null) return;
+    setState(() {
+      _handwritingBytes = result;
+      _dirty = true;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -60,7 +192,62 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (d != null) setState(() => _date = d);
+    if (d == null) return;
+    if (!mounted) return;
+    final t = await showTimePicker(
+      context: context,
+      initialTime: _time,
+      helpText: 'Chọn giờ',
+      cancelText: 'Hủy',
+      confirmText: 'Áp dụng',
+    );
+    if (t == null) return;
+    if (!mounted) return;
+    setState(() {
+      _date = d;
+      _time = t;
+      _dirty = true;
+    });
+  }
+
+  Future<bool> _ensureCloudinaryPresetIfNeeded() async {
+    final cloud = CloudinaryService.instance;
+    await cloud.initialize();
+    if (cloud.isConfigured) return true;
+    if (!mounted) return false;
+
+    _presetCtrl.clear();
+    final preset = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Thiếu Cloudinary preset'),
+          content: TextField(
+            controller: _presetCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Upload preset (unsigned)',
+              hintText: 'Ví dụ: todoapp_unsigned',
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, _presetCtrl.text),
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final value = (preset ?? '').trim();
+    if (value.isEmpty) return false;
+    await cloud.setUploadPreset(value);
+    return true;
   }
 
   Future<void> _autoSaveIfNeeded() async {
@@ -77,6 +264,51 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         widget.editing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     final now = DateTime.now();
 
+    setState(() => _isSaving = true);
+
+    final shouldUpload =
+        _imageFile != null || _pickedFile != null || _handwritingBytes != null;
+    if (shouldUpload) {
+      final configured = await _ensureCloudinaryPresetIfNeeded();
+      if (!configured) {
+        if (mounted) setState(() => _isSaving = false);
+        return;
+      }
+    }
+
+    final cloud = CloudinaryService.instance;
+    String? imagePath = widget.editing?.imagePath;
+    String? filePath = widget.editing?.filePath;
+    String? handwritingPath = widget.editing?.handwritingPath;
+
+    try {
+      if (_imageFile != null) {
+        imagePath = await cloud.uploadImagePath(_imageFile!);
+      }
+      if (_pickedFile != null) {
+        filePath = await cloud.uploadFilePath(_pickedFile!);
+      }
+      if (_handwritingBytes != null) {
+        handwritingPath = await cloud.uploadHandwritingPath(_handwritingBytes!);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi upload Cloudinary: $e')));
+      }
+      if (mounted) setState(() => _isSaving = false);
+      return;
+    }
+
+    final selectedDateTime = DateTime(
+      _date.year,
+      _date.month,
+      _date.day,
+      _time.hour,
+      _time.minute,
+    );
+
     final tx = TransactionModel(
       id: id,
       amount: amountVal,
@@ -84,12 +316,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       title: titleText.isEmpty ? _category : titleText,
       category: _category,
       note: noteText.isEmpty ? null : noteText,
-      date: _date,
+      date: selectedDateTime,
       createdAt: widget.editing?.createdAt ?? now,
       updatedAt: now,
+      imagePath: imagePath,
+      filePath: filePath,
+      handwritingPath: handwritingPath,
     );
 
-    setState(() => _isSaving = true);
     final db = DatabaseService.instance;
     try {
       if (widget.editing == null) {
@@ -113,8 +347,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         'date': Timestamp.fromDate(tx.date),
         'createdAt': Timestamp.fromDate(tx.createdAt),
         'updatedAt': Timestamp.fromDate(tx.updatedAt),
+        'imagePath': tx.imagePath,
+        'filePath': tx.filePath,
+        'handwritingPath': tx.handwritingPath,
         'owner': ownerId,
+        'calendarEventId': null,
+        'calendarSynced': false,
       });
+
+      // Try to insert event into Google Calendar (best-effort)
+      try {
+        final start = tx.date;
+        final end = start.add(const Duration(hours: 1));
+        final eventId = await CalendarService.instance.insertEvent(
+          title: tx.title,
+          start: start,
+          end: end,
+          description: tx.note,
+        );
+        await docRef.update({
+          'calendarSynced': true,
+          'calendarEventId': eventId.isEmpty ? null : eventId,
+        });
+      } catch (e) {
+        // ignore calendar sync errors (best-effort)
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(
@@ -122,10 +379,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ).showSnackBar(const SnackBar(content: Text('Đã lưu')));
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Lỗi lưu: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -138,7 +396,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dateText = DateFormat.yMMMMd('vi_VN').format(_date);
+    final selectedDateTime = DateTime(
+      _date.year,
+      _date.month,
+      _date.day,
+      _time.hour,
+      _time.minute,
+    );
+    final dateText = DateFormat(
+      'dd/MM/yyyy HH:mm',
+      'vi_VN',
+    ).format(selectedDateTime);
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -274,6 +542,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _showImageSourcePicker,
+                          icon: const Icon(Icons.image),
+                          label: Text(
+                            _imageFile == null ? 'Ảnh/Camera' : 'Đã chọn ảnh',
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _pickAnyFile,
+                          icon: const Icon(Icons.attach_file),
+                          label: Text(
+                            _pickedFile == null ? 'Tệp' : 'Đã chọn tệp',
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _captureHandwriting,
+                          icon: const Icon(Icons.draw),
+                          label: Text(
+                            _handwritingBytes == null
+                                ? 'Chữ viết tay'
+                                : 'Đã ký tay',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _noteCtrl,
                       keyboardType: TextInputType.multiline,
@@ -289,12 +587,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Ngày: $dateText',
+                          'Ngày giờ: $dateText',
                           style: const TextStyle(color: Colors.grey),
                         ),
-                        TextButton(
-                          onPressed: _pickDate,
-                          child: const Text('Chọn'),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: _pickDate,
+                              child: const Text('Chọn ngày giờ'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -304,28 +606,27 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       style: TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _isSaving
-                                ? null
-                                : () async {
-                                    await _autoSaveIfNeeded();
-                                    if (mounted) Navigator.pop(context, true);
-                                  },
-                            icon: const Icon(Icons.save),
-                            label: Text(
-                              _isSaving
-                                  ? 'Đang lưu...'
-                                  : (widget.editing == null
-                                        ? 'Thêm'
-                                        : 'Cập nhật'),
+                    // Khi tạo mới, không hiển thị nút 'Thêm' vì tự động lưu khi quay lại
+                    if (widget.editing != null)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isSaving
+                                  ? null
+                                  : () async {
+                                      await _autoSaveIfNeeded();
+                                      if (!context.mounted) return;
+                                      Navigator.of(context).pop(true);
+                                    },
+                              icon: const Icon(Icons.save),
+                              label: Text(
+                                _isSaving ? 'Đang lưu...' : 'Cập nhật',
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),

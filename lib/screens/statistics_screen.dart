@@ -6,6 +6,13 @@ import '../services/database_service.dart';
 
 enum StatisticsRange { weekly, monthly }
 
+class _ExpensePoint {
+  final DateTime date;
+  final double amount;
+
+  const _ExpensePoint({required this.date, required this.amount});
+}
+
 class StatisticsScreen extends StatefulWidget {
   static const routeName = '/statistics';
 
@@ -51,6 +58,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           builder: (context, txs, _) {
             if (txs.isEmpty) return const _EmptyStatisticsState();
             final totals = _aggregateByCategory(txs);
+            final expenseSeries = _aggregateExpenseByDay(
+              txs,
+              range: _selectedRange,
+            );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -64,6 +75,34 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   currency: currency,
                   colors: _chartColors,
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Text(
+                      'Xu hướng chi tiêu',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    SegmentedButton<StatisticsRange>(
+                      segments: const [
+                        ButtonSegment(
+                          value: StatisticsRange.weekly,
+                          label: Text('7 ngày'),
+                        ),
+                        ButtonSegment(
+                          value: StatisticsRange.monthly,
+                          label: Text('30 ngày'),
+                        ),
+                      ],
+                      selected: {_selectedRange},
+                      onSelectionChanged: (selection) {
+                        setState(() => _selectedRange = selection.first);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _ExpenseTrendChart(points: expenseSeries, currency: currency),
               ],
             );
           },
@@ -152,6 +191,108 @@ class _CategoryChart extends StatelessWidget {
   }
 }
 
+class _ExpenseTrendChart extends StatelessWidget {
+  const _ExpenseTrendChart({required this.points, required this.currency});
+
+  final List<_ExpensePoint> points;
+  final NumberFormat currency;
+
+  @override
+  Widget build(BuildContext context) {
+    if (points.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final maxY = points
+        .map((e) => e.amount)
+        .fold<double>(0, (prev, e) => e > prev ? e : prev);
+    final safeMaxY = maxY <= 0 ? 1000.0 : (maxY * 1.2);
+    final interval = points.length <= 10 ? 1 : (points.length / 6).ceil();
+
+    return SizedBox(
+      height: 250,
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: safeMaxY,
+          gridData: FlGridData(show: true, drawVerticalLine: false),
+          borderData: FlBorderData(show: true),
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (spots) {
+                return spots.map((spot) {
+                  final idx = spot.x.toInt();
+                  final point = points[idx];
+                  final date = DateFormat('dd/MM/yyyy').format(point.date);
+                  return LineTooltipItem(
+                    '$date\n${currency.format(point.amount)}',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          titlesData: FlTitlesData(
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: interval.toDouble(),
+                reservedSize: 32,
+                getTitlesWidget: (value, meta) {
+                  final idx = value.toInt();
+                  if (idx < 0 || idx >= points.length) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      DateFormat('dd/MM').format(points[idx].date),
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 48,
+                interval: safeMaxY / 4,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    _compactCurrency(value),
+                    style: const TextStyle(fontSize: 10),
+                  );
+                },
+              ),
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              isCurved: true,
+              barWidth: 3,
+              color: const Color(0xFF0F766E),
+              dotData: const FlDotData(show: false),
+              spots: List.generate(points.length, (index) {
+                return FlSpot(index.toDouble(), points[index].amount);
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String _compactCurrency(double value) {
   if (value >= 1000000) {
     return '${(value / 1000000).toStringAsFixed(1)}M';
@@ -204,57 +345,34 @@ Map<String, double> _aggregateByCategory(List<TransactionModel> transactions) {
   return totals;
 }
 
-Map<String, double> _aggregateByMonth(List<TransactionModel> transactions) {
-  final rawTotals = <DateTime, double>{};
-  for (final transaction in transactions) {
-    final key = DateTime(transaction.date.year, transaction.date.month);
-    rawTotals.update(
-      key,
-      (value) => value + transaction.amount,
-      ifAbsent: () => transaction.amount,
-    );
+List<_ExpensePoint> _aggregateExpenseByDay(
+  List<TransactionModel> transactions, {
+  required StatisticsRange range,
+}) {
+  final today = DateTime.now();
+  final end = DateTime(today.year, today.month, today.day);
+  final days = range == StatisticsRange.weekly ? 7 : 30;
+  final start = end.subtract(Duration(days: days - 1));
+
+  final totals = <DateTime, double>{};
+  for (int i = 0; i < days; i++) {
+    final d = DateTime(start.year, start.month, start.day + i);
+    totals[d] = 0;
   }
 
-  final sortedKeys = rawTotals.keys.toList()..sort();
-  final visibleKeys = sortedKeys.length > 6
-      ? sortedKeys.sublist(sortedKeys.length - 6)
-      : sortedKeys;
-
-  final formatter = DateFormat('MM/yyyy');
-  return {
-    for (final key in visibleKeys) formatter.format(key): rawTotals[key] ?? 0,
-  };
-}
-
-Map<String, double> _aggregateByWeek(List<TransactionModel> transactions) {
-  final rawTotals = <DateTime, double>{};
   for (final transaction in transactions) {
-    final date = DateTime(
+    if (transaction.type != TransactionType.expense) continue;
+    final d = DateTime(
       transaction.date.year,
       transaction.date.month,
       transaction.date.day,
     );
-    final startOfWeek = date.subtract(Duration(days: date.weekday - 1));
-    rawTotals.update(
-      startOfWeek,
-      (value) => value + transaction.amount,
-      ifAbsent: () => transaction.amount,
-    );
+    if (d.isBefore(start) || d.isAfter(end)) continue;
+    totals[d] = (totals[d] ?? 0) + transaction.amount;
   }
 
-  final sortedKeys = rawTotals.keys.toList()..sort();
-  final visibleKeys = sortedKeys.length > 8
-      ? sortedKeys.sublist(sortedKeys.length - 8)
-      : sortedKeys;
-
-  return {
-    for (final key in visibleKeys)
-      'T${_weekOfMonth(key)}\n${DateFormat('dd/MM').format(key)}':
-          rawTotals[key] ?? 0,
-  };
-}
-
-int _weekOfMonth(DateTime date) {
-  final firstDay = DateTime(date.year, date.month, 1);
-  return ((date.day + firstDay.weekday - 2) ~/ 7) + 1;
+  final keys = totals.keys.toList()..sort();
+  return keys
+      .map((d) => _ExpensePoint(date: d, amount: totals[d] ?? 0))
+      .toList();
 }

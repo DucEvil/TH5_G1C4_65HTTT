@@ -126,6 +126,12 @@ class DatabaseService {
           date: date,
           createdAt: created,
           updatedAt: updated,
+          imagePath: (data['imagePath'] ?? data['imageUrl']) as String?,
+          filePath: (data['filePath'] ?? data['fileUrl']) as String?,
+          handwritingPath:
+              (data['handwritingPath'] ?? data['handwritingUrl']) as String?,
+          calendarEventId: data['calendarEventId'] as String?,
+          calendarSynced: data['calendarSynced'] as bool?,
         );
       }).toList();
       transactions.value = list;

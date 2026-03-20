@@ -10,6 +10,11 @@ class TransactionModel {
   final DateTime date;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? imagePath;
+  final String? filePath;
+  final String? handwritingPath;
+  final String? calendarEventId;
+  final bool? calendarSynced;
 
   TransactionModel({
     required this.id,
@@ -21,6 +26,11 @@ class TransactionModel {
     required this.date,
     required this.createdAt,
     required this.updatedAt,
+    this.imagePath,
+    this.filePath,
+    this.handwritingPath,
+    this.calendarEventId,
+    this.calendarSynced,
   });
 
   TransactionModel copyWith({
@@ -33,6 +43,11 @@ class TransactionModel {
     DateTime? date,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? imagePath,
+    String? filePath,
+    String? handwritingPath,
+    String? calendarEventId,
+    bool? calendarSynced,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -44,6 +59,11 @@ class TransactionModel {
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      imagePath: imagePath ?? this.imagePath,
+      filePath: filePath ?? this.filePath,
+      handwritingPath: handwritingPath ?? this.handwritingPath,
+      calendarEventId: calendarEventId ?? this.calendarEventId,
+      calendarSynced: calendarSynced ?? this.calendarSynced,
     );
   }
 
@@ -58,6 +78,11 @@ class TransactionModel {
       'date': date.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'imagePath': imagePath,
+      'filePath': filePath,
+      'handwritingPath': handwritingPath,
+      'calendarEventId': calendarEventId,
+      'calendarSynced': calendarSynced ?? false,
     };
   }
 
@@ -78,6 +103,12 @@ class TransactionModel {
       updatedAt: json['updatedAt'] == null
           ? DateTime.parse(json['date'] as String)
           : DateTime.parse(json['updatedAt'] as String),
+      imagePath: (json['imagePath'] ?? json['imageUrl']) as String?,
+      filePath: (json['filePath'] ?? json['fileUrl']) as String?,
+      handwritingPath:
+          (json['handwritingPath'] ?? json['handwritingUrl']) as String?,
+      calendarEventId: json['calendarEventId'] as String?,
+      calendarSynced: json['calendarSynced'] as bool?,
     );
   }
 }
