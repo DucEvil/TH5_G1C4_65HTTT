@@ -4,13 +4,13 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 
-enum StatisticsRange { weekly, monthly }
+enum StatisticsRange { weekly, monthly, yearly }
 
-class _ExpensePoint {
+class _TrendPoint {
   final DateTime date;
   final double amount;
 
-  const _ExpensePoint({required this.date, required this.amount});
+  const _TrendPoint({required this.date, required this.amount});
 }
 
 class StatisticsScreen extends StatefulWidget {
@@ -58,32 +58,40 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           builder: (context, txs, _) {
             if (txs.isEmpty) return const _EmptyStatisticsState();
             final totals = _aggregateByCategory(txs);
-            final expenseSeries = _aggregateExpenseByDay(
+            final expenseSeries = _aggregateByDay(
               txs,
               range: _selectedRange,
+              type: TransactionType.expense,
             );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Biểu đồ theo danh mục',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                _CategoryChart(
-                  totals: totals,
-                  currency: currency,
-                  colors: _chartColors,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Text(
-                      'Xu hướng chi tiêu',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const Spacer(),
-                    SegmentedButton<StatisticsRange>(
+            final incomeSeries = _aggregateByDay(
+              txs,
+              range: _selectedRange,
+              type: TransactionType.income,
+            );
+            return SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Biểu đồ theo danh mục',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  _CategoryChart(
+                    totals: totals,
+                    currency: currency,
+                    colors: _chartColors,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Xu hướng thu/chi',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<StatisticsRange>(
                       segments: const [
                         ButtonSegment(
                           value: StatisticsRange.weekly,
@@ -93,17 +101,27 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                           value: StatisticsRange.monthly,
                           label: Text('30 ngày'),
                         ),
+                        ButtonSegment(
+                          value: StatisticsRange.yearly,
+                          label: Text('1 năm'),
+                        ),
                       ],
                       selected: {_selectedRange},
                       onSelectionChanged: (selection) {
                         setState(() => _selectedRange = selection.first);
                       },
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _ExpenseTrendChart(points: expenseSeries, currency: currency),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+                  _TrendLegend(),
+                  const SizedBox(height: 8),
+                  _ExpenseTrendChart(
+                    expensePoints: expenseSeries,
+                    incomePoints: incomeSeries,
+                    currency: currency,
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -192,40 +210,63 @@ class _CategoryChart extends StatelessWidget {
 }
 
 class _ExpenseTrendChart extends StatelessWidget {
-  const _ExpenseTrendChart({required this.points, required this.currency});
+  const _ExpenseTrendChart({
+    required this.expensePoints,
+    required this.incomePoints,
+    required this.currency,
+  });
 
-  final List<_ExpensePoint> points;
+  final List<_TrendPoint> expensePoints;
+  final List<_TrendPoint> incomePoints;
   final NumberFormat currency;
 
   @override
   Widget build(BuildContext context) {
-    if (points.isEmpty) {
+    if (expensePoints.isEmpty && incomePoints.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final maxY = points
+    final maxExpense = expensePoints
         .map((e) => e.amount)
         .fold<double>(0, (prev, e) => e > prev ? e : prev);
+    final maxIncome = incomePoints
+        .map((e) => e.amount)
+        .fold<double>(0, (prev, e) => e > prev ? e : prev);
+    final maxY = maxExpense > maxIncome ? maxExpense : maxIncome;
     final safeMaxY = maxY <= 0 ? 1000.0 : (maxY * 1.2);
-    final interval = points.length <= 10 ? 1 : (points.length / 6).ceil();
+    final pointCount = expensePoints.length;
+    final interval = pointCount <= 12 ? 2 : (pointCount / 8).ceil();
+    final maxX = pointCount > 0 ? (pointCount - 1).toDouble() : 0.0;
+
+    final chartHeight = MediaQuery.of(context).size.height < 760
+        ? 210.0
+        : 250.0;
 
     return SizedBox(
-      height: 250,
+      height: chartHeight,
       child: LineChart(
         LineChartData(
+          minX: -0.35,
+          maxX: maxX + 0.35,
           minY: 0,
           maxY: safeMaxY,
           gridData: FlGridData(show: true, drawVerticalLine: false),
           borderData: FlBorderData(show: true),
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
+              fitInsideHorizontally: true,
+              fitInsideVertically: true,
               getTooltipItems: (spots) {
                 return spots.map((spot) {
                   final idx = spot.x.toInt();
-                  final point = points[idx];
-                  final date = DateFormat('dd/MM/yyyy').format(point.date);
+                  final isExpenseLine = spot.barIndex == 0;
+                  final point = isExpenseLine
+                      ? expensePoints[idx]
+                      : incomePoints[idx];
+                  final date = DateFormat('dd/MM').format(point.date);
+                  final label = isExpenseLine ? 'Chi' : 'Thu';
                   return LineTooltipItem(
-                    '$date\n${currency.format(point.amount)}',
+                    '$label $date\n${currency.format(point.amount)}',
                     const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -249,13 +290,13 @@ class _ExpenseTrendChart extends StatelessWidget {
                 reservedSize: 32,
                 getTitlesWidget: (value, meta) {
                   final idx = value.toInt();
-                  if (idx < 0 || idx >= points.length) {
+                  if (idx < 0 || idx >= expensePoints.length) {
                     return const SizedBox.shrink();
                   }
                   return Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      DateFormat('dd/MM').format(points[idx].date),
+                      DateFormat('dd/MM').format(expensePoints[idx].date),
                       style: const TextStyle(fontSize: 10),
                     ),
                   );
@@ -279,16 +320,62 @@ class _ExpenseTrendChart extends StatelessWidget {
           lineBarsData: [
             LineChartBarData(
               isCurved: true,
+              preventCurveOverShooting: true,
               barWidth: 3,
               color: const Color(0xFF0F766E),
               dotData: const FlDotData(show: false),
-              spots: List.generate(points.length, (index) {
-                return FlSpot(index.toDouble(), points[index].amount);
+              spots: List.generate(expensePoints.length, (index) {
+                return FlSpot(index.toDouble(), expensePoints[index].amount);
+              }),
+            ),
+            LineChartBarData(
+              isCurved: true,
+              preventCurveOverShooting: true,
+              barWidth: 3,
+              color: const Color(0xFF2563EB),
+              dotData: const FlDotData(show: false),
+              spots: List.generate(incomePoints.length, (index) {
+                return FlSpot(index.toDouble(), incomePoints[index].amount);
               }),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TrendLegend extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: const [
+        _LegendDot(color: Color(0xFF0F766E), label: 'Chi'),
+        SizedBox(width: 16),
+        _LegendDot(color: Color(0xFF2563EB), label: 'Thu'),
+      ],
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label),
+      ],
     );
   }
 }
@@ -345,13 +432,18 @@ Map<String, double> _aggregateByCategory(List<TransactionModel> transactions) {
   return totals;
 }
 
-List<_ExpensePoint> _aggregateExpenseByDay(
+List<_TrendPoint> _aggregateByDay(
   List<TransactionModel> transactions, {
   required StatisticsRange range,
+  required TransactionType type,
 }) {
   final today = DateTime.now();
   final end = DateTime(today.year, today.month, today.day);
-  final days = range == StatisticsRange.weekly ? 7 : 30;
+  final days = switch (range) {
+    StatisticsRange.weekly => 7,
+    StatisticsRange.monthly => 30,
+    StatisticsRange.yearly => 365,
+  };
   final start = end.subtract(Duration(days: days - 1));
 
   final totals = <DateTime, double>{};
@@ -361,7 +453,7 @@ List<_ExpensePoint> _aggregateExpenseByDay(
   }
 
   for (final transaction in transactions) {
-    if (transaction.type != TransactionType.expense) continue;
+    if (transaction.type != type) continue;
     final d = DateTime(
       transaction.date.year,
       transaction.date.month,
@@ -372,7 +464,5 @@ List<_ExpensePoint> _aggregateExpenseByDay(
   }
 
   final keys = totals.keys.toList()..sort();
-  return keys
-      .map((d) => _ExpensePoint(date: d, amount: totals[d] ?? 0))
-      .toList();
+  return keys.map((d) => _TrendPoint(date: d, amount: totals[d] ?? 0)).toList();
 }

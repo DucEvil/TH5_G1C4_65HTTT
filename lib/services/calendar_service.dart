@@ -30,7 +30,9 @@ class CalendarService {
     String? description,
   }) async {
     final account =
-        _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+        _googleSignIn.currentUser ??
+        await _googleSignIn.signInSilently() ??
+        await _googleSignIn.signIn();
     if (account == null) throw Exception('No Google user signed in');
     final headers = await account.authHeaders;
     final client = _AuthenticatedClient(headers);
@@ -46,5 +48,18 @@ class CalendarService {
         ..timeZone = 'Asia/Ho_Chi_Minh');
     final created = await api.events.insert(event, 'primary');
     return created.id ?? '';
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    if (eventId.trim().isEmpty) return;
+    final account =
+        _googleSignIn.currentUser ??
+        await _googleSignIn.signInSilently() ??
+        await _googleSignIn.signIn();
+    if (account == null) throw Exception('No Google user signed in');
+    final headers = await account.authHeaders;
+    final client = _AuthenticatedClient(headers);
+    final api = gcal.CalendarApi(client);
+    await api.events.delete('primary', eventId);
   }
 }

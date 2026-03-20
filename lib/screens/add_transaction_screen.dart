@@ -34,7 +34,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String _category = kDefaultCategories.first;
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.fromDateTime(DateTime.now());
-  bool _isSaving = false;
   bool _dirty = false;
   File? _imageFile;
   File? _pickedFile;
@@ -264,14 +263,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         widget.editing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     final now = DateTime.now();
 
-    setState(() => _isSaving = true);
-
     final shouldUpload =
         _imageFile != null || _pickedFile != null || _handwritingBytes != null;
     if (shouldUpload) {
       final configured = await _ensureCloudinaryPresetIfNeeded();
       if (!configured) {
-        if (mounted) setState(() => _isSaving = false);
         return;
       }
     }
@@ -297,7 +293,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Lỗi upload Cloudinary: $e')));
       }
-      if (mounted) setState(() => _isSaving = false);
       return;
     }
 
@@ -370,7 +365,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           'calendarEventId': eventId.isEmpty ? null : eventId,
         });
       } catch (e) {
-        // ignore calendar sync errors (best-effort)
+        final errorText = e.toString();
+        final friendly =
+            errorText.contains('Google Calendar API has not been used')
+            ? 'Google Calendar API chưa được bật cho project. Hãy vào Google Cloud Console > APIs & Services > Library > bật Google Calendar API, rồi thử lại sau vài phút.'
+            : 'Không đồng bộ được Calendar: $e';
+        await docRef.update({
+          'calendarSynced': false,
+          'calendarError': e.toString(),
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(friendly)));
+        }
       }
 
       if (mounted) {
@@ -384,8 +392,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Lỗi lưu: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -605,28 +611,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       'Tự động lưu khi bạn quay lại',
                       style: TextStyle(color: Colors.grey, fontSize: 12),
                     ),
-                    const SizedBox(height: 12),
-                    // Khi tạo mới, không hiển thị nút 'Thêm' vì tự động lưu khi quay lại
-                    if (widget.editing != null)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isSaving
-                                  ? null
-                                  : () async {
-                                      await _autoSaveIfNeeded();
-                                      if (!context.mounted) return;
-                                      Navigator.of(context).pop(true);
-                                    },
-                              icon: const Icon(Icons.save),
-                              label: Text(
-                                _isSaving ? 'Đang lưu...' : 'Cập nhật',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                   ],
                 ),
               ),

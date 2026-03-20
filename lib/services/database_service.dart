@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/transaction.dart';
+import '../services/auth_service.dart';
+import '../services/calendar_service.dart';
 
 class DatabaseService {
   DatabaseService._internal();
@@ -41,6 +43,28 @@ class DatabaseService {
   void delete(String id) {
     transactions.value = transactions.value.where((t) => t.id != id).toList();
     _saveToStorage();
+  }
+
+  Future<void> deleteTransaction(TransactionModel tx) async {
+    final uid = AuthService.instance.currentUid;
+
+    // Remote-first delete prevents item reappearing after app restart/sync.
+    if (uid != null && uid.isNotEmpty) {
+      await FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(tx.id)
+          .delete();
+    }
+
+    if (tx.calendarEventId != null && tx.calendarEventId!.isNotEmpty) {
+      try {
+        await CalendarService.instance.deleteEvent(tx.calendarEventId!);
+      } catch (_) {
+        // Do not block transaction deletion if calendar cleanup fails.
+      }
+    }
+
+    delete(tx.id);
   }
 
   double get totalIncome => transactions.value

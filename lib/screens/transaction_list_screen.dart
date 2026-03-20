@@ -296,7 +296,18 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                             ],
                           ),
                         );
-                        if (ok == true) db.delete(t.id);
+                        if (ok == true) {
+                          try {
+                            await db.deleteTransaction(t);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Xóa thất bại: $e')),
+                              );
+                            }
+                            return false;
+                          }
+                        }
                         return ok == true;
                       },
                       child: ListTile(
